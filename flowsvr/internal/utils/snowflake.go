@@ -1,19 +1,52 @@
-package util
+package utils
 
 import (
 	"fmt"
+	log "github.com/sirupsen/logrus"
 	"sync"
 	"time"
 )
 
-var SnowflakeGenerator *snowflake
+var (
+	snowflakeGenerator *Snowflake
+	sfOnce             sync.Once
+)
 
-func init() {
+func GetSnowflakeGenerator() *Snowflake {
+	sfOnce.Do(func() {
+		initGenerator()
+	})
+	return snowflakeGenerator
+}
+
+func initGenerator() {
 	var err error
-	SnowflakeGenerator, err = newSnowflake(1, 1)
+	snowflakeGenerator, err = newSnowflake(1, 1)
 	if err != nil {
-		Logger.Fatal("snowflake init failed, err: %s", err.Error())
+		log.Fatalf("Snowflake init failed, err: %s", err.Error())
 	}
+}
+
+// NewSnowflake 创建一个新的 Snowflake 实例
+// 参数 workerId 和 datacenterId 分别表示工作节点ID和数据中心ID
+// 返回值为 Snowflake 实例和错误信息
+func newSnowflake(workerId, datacenterId int64) (*Snowflake, error) {
+	// 检查 workerId 和 datacenterId 是否在有效范围内
+	maxWorkerID := int64(-1) ^ (int64(-1) << workerIdBits)
+	maxDatacenterID := int64(-1) ^ (int64(-1) << datacenterIdBits)
+	if workerId < 0 || workerId > maxWorkerID {
+		return nil, fmt.Errorf("worker ID must be between 0 and %d", maxWorkerID)
+	}
+	if datacenterId < 0 || datacenterId > maxDatacenterID {
+		return nil, fmt.Errorf("datacenter ID must be between 0 and %d", maxDatacenterID)
+	}
+
+	return &Snowflake{
+		lastTimestamp: -1,
+		workerId:      workerId,
+		datacenterId:  datacenterId,
+		sequence:      0,
+	}, nil
 }
 
 // 定义一些常量
@@ -38,8 +71,8 @@ const (
 	twepoch = 1577836800000
 )
 
-// snowflake 结构体
-type snowflake struct {
+// Snowflake 结构体
+type Snowflake struct {
 	mu            sync.Mutex // 互斥锁，用于保护并发访问
 	lastTimestamp int64      // 上次生成ID的时间戳
 	workerId      int64      // 工作节点ID
@@ -47,31 +80,9 @@ type snowflake struct {
 	sequence      int64      // 序列号
 }
 
-// NewSnowflake 创建一个新的 snowflake 实例
-// 参数 workerId 和 datacenterId 分别表示工作节点ID和数据中心ID
-// 返回值为 snowflake 实例和错误信息
-func newSnowflake(workerId, datacenterId int64) (*snowflake, error) {
-	// 检查 workerId 和 datacenterId 是否在有效范围内
-	maxWorkerID := int64(-1) ^ (int64(-1) << workerIdBits)
-	maxDatacenterID := int64(-1) ^ (int64(-1) << datacenterIdBits)
-	if workerId < 0 || workerId > maxWorkerID {
-		return nil, fmt.Errorf("worker ID must be between 0 and %d", maxWorkerID)
-	}
-	if datacenterId < 0 || datacenterId > maxDatacenterID {
-		return nil, fmt.Errorf("datacenter ID must be between 0 and %d", maxDatacenterID)
-	}
-
-	return &snowflake{
-		lastTimestamp: -1,
-		workerId:      workerId,
-		datacenterId:  datacenterId,
-		sequence:      0,
-	}, nil
-}
-
 // NextId 生成下一个唯一 ID
 // 返回值为生成的唯一 ID 和错误信息
-func (s *snowflake) NextId() (int64, error) {
+func (s *Snowflake) NextId() (int64, error) {
 	// 加锁，确保并发安全
 	s.mu.Lock()
 	// 函数结束时解锁

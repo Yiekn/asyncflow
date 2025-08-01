@@ -1,0 +1,14 @@
+mysql:
+  host: 121.37.46.115 # 数据库地址
+  port: 3306 # 数据库端口
+  username: root # 数据库用户名
+  password: 123456 # 数据库密码
+  database: asyncflow # 数据库名称
+snowflake:
+  worker_id: 1 # 雪花算法工作节点ID
+  datacenter_id: 1 # 雪花算法数据中心ID
+log:
+  log_pattern: stdout # 日志输出模式
+  log_path: ./logs # 日志文件路径
+  save_days: 7 # 日志保存天数
+  log_level: info # 日志级别
